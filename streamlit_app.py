@@ -47,6 +47,14 @@ if "df" in st.session_state:
 if "df" not in st.session_state:
     st.info("Please ingest the dataset first to enable question entry.")
 
+def get_model_api_url():
+    model_api_base_url = os.getenv("MODEL_API_BASE_URL")
+    if not model_api_base_url:
+        return None, "MODEL_API_BASE_URL is not set. Add it in Streamlit Cloud as a secret and redeploy."
+    if model_api_base_url.endswith("/api/generate"):
+        return model_api_base_url, None
+    return f"{model_api_base_url.rstrip('/')}/api/generate", None
+
 # Callback to submit prompt when Enter is pressed
 def ask_question():
     dataset = st.session_state.get("df")
@@ -61,11 +69,10 @@ def ask_question():
         return
 
     full_prompt = f"{prompt}\n\nDataset:\n{dataset.to_string()}\n\nGive a clear, short, concise answer without exlanation."
-    model_api_base_url = os.getenv("MODEL_API_BASE_URL", "http://localhost:11434")
-    if model_api_base_url.endswith("/api/generate"):
-        url = model_api_base_url
-    else:
-        url = f"{model_api_base_url.rstrip('/')}/api/generate"
+    url, error_message = get_model_api_url()
+    if error_message:
+        st.session_state["response"] = error_message
+        return
     payload = {
         "model": "llama3.1",
         "prompt": full_prompt,
