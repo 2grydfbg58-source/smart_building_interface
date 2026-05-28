@@ -1,29 +1,12 @@
-import json
-import os
 import pandas as pd
-import requests
 import streamlit as st
+from utils.llm import get_response, get_model_api_url
+from utils.helper import get_dataset_path
+from utils.prompt import create_payload
 
+# Title and description
 st.title("Prototype")
 st.write("This is my first Streamlit app!")
-
-@st.cache_data
-def get_response(url, payload):
-    try:
-        with requests.post(url, json=payload, timeout=60) as r:
-            r.raise_for_status()
-            for line in r.iter_lines():
-                if line:
-                    obj = json.loads(line)
-                    return obj.get("response", "")
-    except requests.RequestException as exc:
-        return f"Error communicating with model API: {exc}"
-
-# Function to get the dataset path
-def get_dataset_path():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(current_dir, "data", "building_dataset.csv")
-    return csv_path
 
 # Layout for dataset ingestion
 col1 = st.columns(1)
@@ -47,14 +30,6 @@ if "df" in st.session_state:
 if "df" not in st.session_state:
     st.info("Please ingest the dataset first to enable question entry.")
 
-def get_model_api_url():
-    model_api_base_url = os.getenv("MODEL_API_BASE_URL")
-    if not model_api_base_url:
-        return None, "MODEL_API_BASE_URL is not set. Add it in Streamlit Cloud as a secret and redeploy."
-    if model_api_base_url.endswith("/api/generate"):
-        return model_api_base_url, None
-    return f"{model_api_base_url.rstrip('/')}/api/generate", None
-
 # Callback to submit prompt when Enter is pressed
 def ask_question():
     dataset = st.session_state.get("df")
@@ -68,18 +43,13 @@ def ask_question():
         st.session_state["response"] = "Please enter a prompt and press Enter."
         return
 
-    full_prompt = f"{prompt}\n\nDataset:\n{dataset.to_string()}\n\nGive a clear, short, concise answer without exlanation."
     url, error_message = get_model_api_url()
+
     if error_message:
         st.session_state["response"] = error_message
         return
-    payload = {
-        "model": "llama3.1",
-        "prompt": full_prompt,
-        "temperature": st.session_state.get("temperature", 0.2),
-        "max_tokens": st.session_state.get("max_tokens", 10),
-        "stream": False
-    }
+    
+    payload = create_payload(prompt, dataset)
 
     with loading_placeholder.container():
         with st.spinner("Generating response..."):
