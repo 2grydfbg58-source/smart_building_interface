@@ -9,11 +9,15 @@ st.write("This is my first Streamlit app!")
 
 @st.cache_data
 def get_response(url, payload):
-    with requests.post(url, json=payload) as r:
-        for line in r.iter_lines():
-            if line:
-                obj = json.loads(line)
-                return obj.get("response", "")
+    try:
+        with requests.post(url, json=payload, timeout=60) as r:
+            r.raise_for_status()
+            for line in r.iter_lines():
+                if line:
+                    obj = json.loads(line)
+                    return obj.get("response", "")
+    except requests.RequestException as exc:
+        return f"Error communicating with model API: {exc}"
 
 # Function to get the dataset path
 def get_dataset_path():
@@ -57,7 +61,11 @@ def ask_question():
         return
 
     full_prompt = f"{prompt}\n\nDataset:\n{dataset.to_string()}\n\nGive a clear, short, concise answer without exlanation."
-    url = "http://localhost:11434/api/generate"
+    model_api_base_url = os.getenv("MODEL_API_BASE_URL", "http://localhost:11434")
+    if model_api_base_url.endswith("/api/generate"):
+        url = model_api_base_url
+    else:
+        url = f"{model_api_base_url.rstrip('/')}/api/generate"
     payload = {
         "model": "llama3.1",
         "prompt": full_prompt,
