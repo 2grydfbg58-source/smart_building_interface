@@ -12,9 +12,23 @@ def parse_structured_response(text):
     if not cleaned:
         return None
 
+    decoder = json.JSONDecoder()
+    for marker in ("{", "["):
+        start = cleaned.find(marker)
+        if start == -1:
+            continue
+
+        snippet = cleaned[start:]
+        try:
+            parsed, _ = decoder.raw_decode(snippet)
+            if isinstance(parsed, (dict, list)):
+                return parsed
+        except json.JSONDecodeError:
+            continue
+
     try:
         parsed = json.loads(cleaned)
-        if isinstance(parsed, dict):
+        if isinstance(parsed, (dict, list)):
             return parsed
     except json.JSONDecodeError:
         return None
@@ -22,8 +36,34 @@ def parse_structured_response(text):
     return None
 
 
+def normalize_response(text, prompt=None):
+    if not isinstance(text, str):
+        return text
+
+    cleaned = text.strip()
+    if not cleaned or not prompt:
+        return cleaned
+
+    expected_prompt = prompt.strip()
+    if not expected_prompt:
+        return cleaned
+
+    lines = cleaned.splitlines()
+    if not lines:
+        return cleaned
+
+    first_line = lines[0].strip()
+    if first_line == expected_prompt:
+        remainder = "\n".join(lines[1:]).strip()
+        return remainder
+
+    return cleaned
+
+
 @st.cache_data
 def get_response(url, payload):
+    user_prompt = payload.get("user_prompt")
+
     try:
         with requests.post(url, json=payload, timeout=60) as r:
             r.raise_for_status()
@@ -31,10 +71,12 @@ def get_response(url, payload):
                 if line:
                     obj = json.loads(line)
                     response_text = obj.get("response", "")
-                    structured = parse_structured_response(response_text)
+                    cleaned_response = normalize_response(response_text, user_prompt)
+                    structured = parse_structured_response(cleaned_response)
                     if structured is not None:
                         return structured
-                    return response_text
+                    return cleaned_response
+                
     except requests.RequestException as exc:
         return f"Error communicating with model API: {exc}"
 
