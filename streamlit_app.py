@@ -5,11 +5,11 @@ from utils.helper import get_dataset_path
 from utils.prompt import create_payload
 
 
-st.set_page_config(page_title="Smart Building Conversational Assistant", layout="wide")
+st.set_page_config(page_title="Smart Building Assistant", layout="wide")
 
-st.title("Smart Building Conversational Assistant")
+st.title("Smart Building Assistant")
 st.write(
-    "Ingest the dataset, then chat with the assistant. Questions are answered from the dataset, and control commands return JSON that needs confirmation."
+    "Ingest the dataset, then chat with the assistant."
 )
 
 
