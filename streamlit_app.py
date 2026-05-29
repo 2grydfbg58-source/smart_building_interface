@@ -1,8 +1,9 @@
 import pandas as pd
 import streamlit as st
 from utils.llm import get_response, get_model_api_url
-from utils.helper import get_dataset_path
+from utils.helper import get_dataset_path, load_dataset_as_documents
 from utils.prompt import create_payload
+from utils.rag import index_documents, retrieve
 
 
 st.set_page_config(page_title="Smart Building Assistant", layout="wide")
@@ -11,7 +12,6 @@ st.title("Smart Building Assistant")
 st.write(
     "Ingest the dataset, then chat with the assistant."
 )
-
 
 if "conversation" not in st.session_state:
     st.session_state["conversation"] = []
@@ -24,13 +24,14 @@ if "temperature" not in st.session_state:
 if "max_tokens" not in st.session_state:
     st.session_state["max_tokens"] = 100
 
-
 with st.sidebar:
     st.subheader("Controls")
     if st.button("Ingest Dataset"):
         try:
             csv_path = get_dataset_path()
-            st.session_state["df"] = pd.read_csv(csv_path)
+            docs, df = load_dataset_as_documents(csv_path)
+            index_documents(docs)
+            st.session_state["df"] = df
             st.session_state["conversation"] = []
             st.session_state["pending_action"] = None
             st.session_state["confirmation_status"] = ""
@@ -68,15 +69,13 @@ if "df" in st.session_state:
 else:
     st.info("Please ingest the dataset first to enable chat.")
 
-
 def append_message(role, content):
     st.session_state["conversation"].append({"role": role, "content": content})
 
-
 def handle_turn(prompt):
-    dataset = st.session_state.get("df")
-    if dataset is None:
-        st.session_state["confirmation_status"] = "Please ingest the dataset first."
+    retrieved_documents = retrieve(prompt)
+    if not retrieved_documents:
+        st.session_state["confirmation_status"] = "No relevant information found."
         return
 
     prompt = prompt.strip()
@@ -119,7 +118,7 @@ def handle_turn(prompt):
         message for message in st.session_state["conversation"][:-1]
     ]
 
-    payload = create_payload(prompt, dataset, conversation_history=history)
+    payload = create_payload(prompt, retrieved_documents, conversation_history=history)
 
     with st.spinner("Generating response..."):
         response = get_response(url, payload)
