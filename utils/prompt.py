@@ -20,39 +20,45 @@ def build_conversation_context(conversation_history=None):
 
 def create_full_prompt(prompt, dataset, conversation_history=None):
     conversation_context = build_conversation_context(conversation_history)
+
+    if hasattr(dataset, "to_string"):
+        dataset_context = dataset.to_string()
+    elif isinstance(dataset, list):
+        dataset_context = "\n".join(str(item) for item in dataset)
+    else:
+        dataset_context = str(dataset)
+
     prompt = f"""
-        You are a helpful building assistant for a smart building interface.
+        You are a helpful building assistant.
+        
         Maintain the conversation context across turns.
         If the user asks a follow-up question, answer based on the previous conversation and the dataset.
-        If the user issues a control command, return ONLY a valid JSON object asking for confirmation.
-
-        {conversation_context}
-
-        Dataset:
-        {dataset.to_string()}
-
+        
+        Conversation history: {conversation_context}
+        Context: {dataset_context}
         Current user request: {prompt}
 
         Follow these rules:
-        1. If user request is a question, answer it directly from the dataset and keep the response short and concise.
-            For example question:
-            What is the temperature in the living room?
-            Example answer: The temperature in the living room is 21 C.
+        1. If user request is a question, answer it directly ONLY from the dataset and keep the response short and concise.
+           If you cannot answer it, say "don't know" or "That information is not in the dataset" instead of making up an answer.
+           Do not include any extra explanation or context.
+        
+           Example question:
+           Q: What is the temperature in the living room?
+           A: The temperature in the living room is 21 C.
 
-        2. If user request is a command to change a parameter, return ONLY a valid JSON object and no extra explanation.
+        2. If user request is a command to change a parameter, return ONLY a valid JSON object, and no extra explanation.
+           Ask for confirmation.
            The JSON must contain:
-           - "intent": "control"
            - "action": a concise action name such as "set_temperature"
            - "parameter": the parameter name being changed
            - "value": the requested numeric or text value
-           - "unit": the unit if provided, otherwise null
            - "location": the location or "unknown" if not provided
-           - "confirmation_required": true
            - "message": a confirmation prompt for the user
 
-            Example command:
-            Set the temperature to 22 C in the living room.
-            Example JSON response: {{"intent":"control","action":"set_temperature","parameter":"temperature","value":22,"unit":"C","location":"unknown","confirmation_required":true,"message":"Confirm changing temperature to 22 C."}}
+           Example command:
+           Set the temperature to 22 C in the living room.
+           Example JSON response: {{"action":"set_temperature","parameter":"temperature","value":22,"location":"unknown","message":"Confirm changing temperature to 22 C."}}
         """
     return prompt
 
